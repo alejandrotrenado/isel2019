@@ -6,7 +6,7 @@
 
 #define LED 2
 volatile int timeout = 0;
-#define minuto 6000/portTICK_RATE_MS
+#define minuto 60000/portTICK_RATE_MS
 #define tiempoGuarda 120/portTICK_RATE_MS
 
 
@@ -75,7 +75,7 @@ int button_pressed (fsm_t *this) {
 void led_off (fsm_t *this) {
   int tiempo_apagado=xTaskGetTickCount ()+minuto;
   while(xTaskGetTickCount ()<tiempo_apagado){
-  //no hará nada hasta que no pase un minuto
+  //no harÃ¡ nada hasta que no pase un minuto
   }
   GPIO_OUTPUT_SET(LED, 1);
 }
@@ -85,7 +85,7 @@ void led_on (fsm_t *this) {
 }
 
 /*
- * Máquina de estados: lista de transiciones
+ * MÃ¡quina de estados: lista de transiciones
  * { EstadoOrigen, CondicionDeDisparo, EstadoFinal, AccionesSiTransicion }
  */
 static fsm_trans_t interruptor[] = {
