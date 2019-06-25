@@ -60,13 +60,13 @@ uint32 user_rf_cal_sector_set(void)
 /*funciones de comprobación */
 
 int button_pressed (fsm_t *this) {
-    if(GPIO_INPUT_GET(0)){
-    if (xTaskGetTickCount () < timeout) {
+    if(!GPIO_INPUT_GET(0)){
+    if (xTaskGetTickCount () > timeout) {
   		timeout = xTaskGetTickCount () + tiempoGuarda ;
-  		return 0;
+  		return 1;
   	}
-  	timeout = xTaskGetTickCount () + tiempoGuarda ;
-    return 1;
+  	
+    return 0;
   }
   return 0;
 
