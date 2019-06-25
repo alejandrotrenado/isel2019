@@ -2,13 +2,13 @@
 #include "freertos/task.h"
 #include "gpio.h"
 #include "fsm.h"
-
-
 #define LED 2
-volatile int timeout = 0;
-#define minuto 60000/portTICK_RATE_MS
+#define PERIOD_TICK 100/portTICK_RATE_MS
 #define tiempoGuarda 120/portTICK_RATE_MS
+#define segundo 1000/portTICK_RATE_MS
 
+volatile int timeout = 0;
+volatile int tiempo_apagar=0;
 
 /******************************************************************************
  * FunctionName : user_rf_cal_sector_set
@@ -22,6 +22,12 @@ volatile int timeout = 0;
  * Parameters   : none
  * Returns      : rf cal sector
 *******************************************************************************/
+
+enum fsm_state {
+  LED_ON,
+  LED_OFF,
+};
+
 uint32 user_rf_cal_sector_set(void)
 {
     flash_size_map size_map = system_get_flash_size_map();
@@ -53,34 +59,36 @@ uint32 user_rf_cal_sector_set(void)
     return rf_cal_sec;
 }
 
-#define PERIOD_TICK 100/portTICK_RATE_MS
-enum fsm_state {
-  LED_ON,
-  LED_OFF,
-};
+/*funciones de comprobación */
 
 int button_pressed (fsm_t *this) {
     if(!GPIO_INPUT_GET(0)){
-    if (xTaskGetTickCount () < timeout) {
+    if (xTaskGetTickCount () > timeout) {
   		timeout = xTaskGetTickCount () + tiempoGuarda ;
-  		return 0;
+  		return 1;
   	}
-  	timeout = xTaskGetTickCount () + tiempoGuarda ;
-    return 1;
+    return 0;
   }
   return 0;
 
 }
 
+int timeout_1s(fsm_t *this){
+    if (xTaskGetTickCount () > tiempo_apagar) {
+  		return 1;
+  	}
+    return 0;
+
+}
+
+/* funciones de salida */
+
 void led_off (fsm_t *this) {
-  int tiempo_apagado=xTaskGetTickCount ()+minuto;
-  while(xTaskGetTickCount ()<tiempo_apagado){
-  //no hará nada hasta que no pase un minuto
-  }
   GPIO_OUTPUT_SET(LED, 1);
 }
 
 void led_on (fsm_t *this) {
+  tiempo_apagar=xTaskGetTickCount()+segundo;
   GPIO_OUTPUT_SET(LED, 0);
 }
 
@@ -90,25 +98,33 @@ void led_on (fsm_t *this) {
  */
 static fsm_trans_t interruptor[] = {
   { LED_OFF, button_pressed, LED_ON,  led_on },
-  { LED_ON,  button_pressed, LED_OFF, led_off},
+  { LED_ON,  timeout_1s, LED_OFF, led_off},
   {-1, NULL, -1, NULL },
 };
 
-void inter(void* ignore)
-{
+void sensor(void* ignore)
+{   
     fsm_t* fsm = fsm_new(interruptor);
-    led_on(fsm);
-    led_off(fsm);
     portTickType xLastWakeTime;
 
     xLastWakeTime = xTaskGetTickCount ();
+    //GPIO0_input_conf();
     while(true) {
       fsm_fire(fsm);
       vTaskDelayUntil(&xLastWakeTime, PERIOD_TICK);
     }
+
+    
 }
 
+/******************************************************************************
+ * FunctionName : user_init
+ * Description  : entry of user application, init user function here
+ * Parameters   : none
+ * Returns      : none
+*******************************************************************************/
 void user_init(void)
 {
-    xTaskCreate (inter, "startup", 2048, NULL, 1, NULL);
+    xTaskCreate(&sensor, "startup", 2048, NULL, 1, NULL);
 }
+
