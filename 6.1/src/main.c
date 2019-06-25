@@ -2,13 +2,14 @@
 #include "freertos/task.h"
 #include "gpio.h"
 #include "fsm.h"
-
-
 #define LED 2
-volatile int timeout = 0;
-#define minuto 6000/portTICK_RATE_MS
-#define tiempoGuarda 200/portTICK_RATE_MS
+#define PERIOD_TICK 100/portTICK_RATE_MS
+#define tiempoGuarda 120/portTICK_RATE_MS
+#define segundo 1000/portTICK_RATE_MS
 
+volatile int timeout_1 = 0;
+volatile int timeout_2 = 0;
+int preparado=0;
 
 /******************************************************************************
  * FunctionName : user_rf_cal_sector_set
@@ -22,6 +23,15 @@ volatile int timeout = 0;
  * Parameters   : none
  * Returns      : rf cal sector
 *******************************************************************************/
+
+enum fsm_state {
+  LED_ON,
+  LED_OFF,
+  ARMADO,
+  DESARMADO,
+};
+
+
 uint32 user_rf_cal_sector_set(void)
 {
     flash_size_map size_map = system_get_flash_size_map();
@@ -53,92 +63,118 @@ uint32 user_rf_cal_sector_set(void)
     return rf_cal_sec;
 }
 
-#define PERIOD_TICK 100/portTICK_RATE_MS
-enum fsm_state {
-  ARMADO,
-  DESARMADO,
-};
-/* si el boton del GPIO 0,D3 está pulsada entonces quitaremos los rebotes
-y encenderemos el led*/
-int detec_presencia (fsm_t *this) {
-  static portTickType xLastISRTick1 = 0;
-  portTickType now = xTaskGetTickCount ();
-  //GPIO_OUTPUT_SET(LED,GPIO_INPUT_GET(15));
-  if( GPIO_INPUT_GET(13)&&!GPIO_INPUT_GET(0)){
-    //GPIO_OUTPUT_SET(LED,0); 
-    if(now>xLastISRTick1){
-      return 1;
-    }
-    xLastISRTick1 = now + tiempoGuarda;
-  return 0;
+/*funciones de comprobación */
+
+int detec_presencia_1 (fsm_t *this) {
+    if(!GPIO_INPUT_GET(12) && preparado==1){
+    if (xTaskGetTickCount () > timeout_1) {
+  		timeout_1 = xTaskGetTickCount () + tiempoGuarda ;
+  		return 1;
+  	}
+    return 0;
   }
-  else{
-  return 0;}
+  return 0;
+
 }
-/* si el boton del GPIO 14,D5 está pulsada entonces quitaremos los rebotes
-y armaremos la alarma*/
-int armar (fsm_t *this) {
-  static portTickType xLastISRTick0 = 0;
-  portTickType now = xTaskGetTickCount ();
-  if( !GPIO_INPUT_GET(0)){
-    if(now>xLastISRTick0){
-      return 1;
-    }
-    xLastISRTick0 = now + tiempoGuarda;
-  return 0;
+
+int detec_presencia_2 (fsm_t *this) {
+    if(GPIO_INPUT_GET(12) || preparado==0){
+    if (xTaskGetTickCount () > timeout_1) {
+  		timeout_1 = xTaskGetTickCount () + tiempoGuarda ;
+  		return 1;
+  	}
+    return 0;
   }
-  else{
-  return 0;}
+  return 0;
+
 }
-/* si el boton del GPIO 14,D5 no está pulsado entonces quitaremos los rebotes
-y desarmaremos la alarma*/
-int desarmar (fsm_t *this) {
-  static portTickType xLastISRTick0 = 0;
-  portTickType now = xTaskGetTickCount ();
-  if( GPIO_INPUT_GET(0)){
-    if(now>xLastISRTick0){
-      return 1;
-    }
-    xLastISRTick0 = now + tiempoGuarda;
-  return 0;
+
+int comp_armar_1 (fsm_t *this) {
+    if(!GPIO_INPUT_GET(14)){
+    if (xTaskGetTickCount () > timeout_2) {
+  		timeout_2 = xTaskGetTickCount () + tiempoGuarda ;
+  		return 1;
+  	}
+    return 0;
   }
-  else{
-  return 0;}
+  return 0;
+
+}
+
+int comp_armar_2 (fsm_t *this) {
+    if(GPIO_INPUT_GET(14)){
+    if (xTaskGetTickCount () > timeout_2) {
+  		timeout_2 = xTaskGetTickCount () + tiempoGuarda ;
+  		return 1;
+  	}
+    return 0;
+  }
+  return 0;
+
+}
+
+/* funciones de salida */
+
+void led_off (fsm_t *this) {
+  GPIO_OUTPUT_SET(LED, 1);
 }
 
 void led_on (fsm_t *this) {
-GPIO_OUTPUT_SET(LED,0);
-}
-void led_off (fsm_t *this) {
-GPIO_OUTPUT_SET(LED,1);
+
+  GPIO_OUTPUT_SET(LED, 0);
 }
 
+void armar (fsm_t *this){
+    preparado=1;
+
+}
+void desarmar (fsm_t *this){
+    preparado=0;
+
+}
 /*
  * Máquina de estados: lista de transiciones
  * { EstadoOrigen, CondicionDeDisparo, EstadoFinal, AccionesSiTransicion }
  */
-static fsm_trans_t interruptor[] = {
-  {DESARMADO, armar, ARMADO, led_off },
-  {ARMADO, detec_presencia, ARMADO, led_on},
-  {ARMADO, desarmar, DESARMADO, led_off},
+static fsm_trans_t detector_presencia[] = {
+  { LED_OFF, detec_presencia_1, LED_ON,  led_on },
+  { LED_ON,  detec_presencia_2, LED_OFF, led_off},
   {-1, NULL, -1, NULL },
 };
 
-void inter(void* ignore)
-{
-    fsm_t* fsm = fsm_new(interruptor);
-    //led_on(fsm);
-    //led_off(fsm);
+static fsm_trans_t armar_alarma[] = {
+  { DESARMADO, comp_armar_1, ARMADO,  armar },
+  { ARMADO,  comp_armar_2, DESARMADO, desarmar},
+  {-1, NULL, -1, NULL },
+};
+
+
+void sensor(void* ignore)
+{   
+    fsm_t* fsm_1 = fsm_new(detector_presencia);
+    fsm_t* fsm_2 = fsm_new(armar_alarma);
     portTickType xLastWakeTime;
 
     xLastWakeTime = xTaskGetTickCount ();
     while(true) {
-      fsm_fire(fsm);
+      fsm_fire(fsm_1);
+      fsm_fire(fsm_2);
       vTaskDelayUntil(&xLastWakeTime, PERIOD_TICK);
     }
+
+    
 }
 
+/******************************************************************************
+ * FunctionName : user_init
+ * Description  : entry of user application, init user function here
+ * Parameters   : none
+ * Returns      : none
+*******************************************************************************/
 void user_init(void)
 {
-    xTaskCreate (inter, "startup", 2048, NULL, 1, NULL);
+    PIN_FUNC_SELECT(GPIO_PIN_REG_12,FUNC_GPIO12);
+    PIN_FUNC_SELECT(GPIO_PIN_REG_14,FUNC_GPIO14);
+    xTaskCreate(&sensor, "startup", 2048, NULL, 1, NULL);
 }
+
