@@ -2,11 +2,11 @@
 #include "freertos/task.h"
 #include "gpio.h"
 #include "fsm.h"
-
 #define LED 2
-volatile int timeout = 0;
+#define PERIOD_TICK 100/portTICK_RATE_MS
 #define tiempoGuarda 120/portTICK_RATE_MS
 
+volatile int timeout = 0;
 
 /******************************************************************************
  * FunctionName : user_rf_cal_sector_set
@@ -20,6 +20,12 @@ volatile int timeout = 0;
  * Parameters   : none
  * Returns      : rf cal sector
 *******************************************************************************/
+
+enum fsm_state {
+  LED_ON,
+  LED_OFF,
+};
+
 uint32 user_rf_cal_sector_set(void)
 {
     flash_size_map size_map = system_get_flash_size_map();
@@ -51,14 +57,10 @@ uint32 user_rf_cal_sector_set(void)
     return rf_cal_sec;
 }
 
-#define PERIOD_TICK 100/portTICK_RATE_MS
-enum fsm_state {
-  LED_ON,
-  LED_OFF,
-};
+/*funciones de comprobación */
 
 int button_pressed (fsm_t *this) {
-    if(!GPIO_INPUT_GET(0)){
+    if(GPIO_INPUT_GET(0)){
     if (xTaskGetTickCount () < timeout) {
   		timeout = xTaskGetTickCount () + tiempoGuarda ;
   		return 0;
@@ -70,6 +72,8 @@ int button_pressed (fsm_t *this) {
 
 }
 
+/* funciones de salida */
+
 void led_off (fsm_t *this) {
   GPIO_OUTPUT_SET(LED, 1);
 }
@@ -79,7 +83,7 @@ void led_on (fsm_t *this) {
 }
 
 /*
- * M�quina de estados: lista de transiciones
+ * Máquina de estados: lista de transiciones
  * { EstadoOrigen, CondicionDeDisparo, EstadoFinal, AccionesSiTransicion }
  */
 static fsm_trans_t interruptor[] = {
@@ -88,20 +92,29 @@ static fsm_trans_t interruptor[] = {
   {-1, NULL, -1, NULL },
 };
 
-void inter(void* ignore)
-{
+void lampara(void* ignore)
+{   
     fsm_t* fsm = fsm_new(interruptor);
-    led_off(fsm);
     portTickType xLastWakeTime;
 
     xLastWakeTime = xTaskGetTickCount ();
+    //GPIO0_input_conf();
     while(true) {
       fsm_fire(fsm);
       vTaskDelayUntil(&xLastWakeTime, PERIOD_TICK);
     }
+
+    
 }
 
+/******************************************************************************
+ * FunctionName : user_init
+ * Description  : entry of user application, init user function here
+ * Parameters   : none
+ * Returns      : none
+*******************************************************************************/
 void user_init(void)
 {
-    xTaskCreate (inter, "startup", 2048, NULL, 1, NULL);
+    xTaskCreate(&lampara, "startup", 2048, NULL, 1, NULL);
 }
+
