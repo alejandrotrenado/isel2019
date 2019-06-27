@@ -1,0 +1,90 @@
+  
+/*ejercicio_10*/
+/*parte4.1*/
+ltl spec1{
+	[]((button_pressed && interruptor==LED_OFF) -> (<>(interruptor == LED_ON)))
+}
+
+/*parte5.1*/
+ltl spec2{
+	[]((interruptor==LED_ON && [](!button_pressed)) -> <>(interruptor==LED_OFF))
+}
+
+/*parte6.1*/
+ltl spec3{
+	[]((presencia==true && alarma==ARMADO) -> <> (interruptor==LED_ON) )
+}
+
+/*parte 7,8 y 9*/
+ltl spec4{
+	[](contraseña_correcta==true -> <>(alarma==ARMADO))
+}
+
+/*MAQUINAS DE ESTADO*/
+
+mtype={LED_ON,LED_OFF};
+mtype interruptor;
+bit button_pressed;
+
+mtype={ARMADO,DESARMADO};
+mtype alarma;
+bit presencia;
+
+bit contraseña;
+
+/*proctype*/
+active proctype led(){
+	interruptor=LED_OFF;
+	do
+		::(interruptor== LED_ON)-> atomic{
+			if
+				:: button_pressed && alarma= ARMADO -> interruptor=LED_ON
+				:: !button_pressed-> interruptor=LED_OFF
+				:: skip
+			fi;
+		}
+		::(interruptor==LED_OFF)-> atomic{
+			if
+				:: button_pressed -> interruptor=LED_ON
+			fi
+
+		}
+	od
+
+}
+
+active proctype contraseña(){
+	alarma=DESARMADO;
+	do
+		::(alarma== DESARMADO)-> atomic{
+			if
+				:: contraseña -> alarma=ARMADO
+			fi;
+		}
+		::(alarma==ARMADO)-> atomic{
+			if
+				:: contraseña -> alarma=DESARMADO
+			fi
+		}
+	od
+
+}
+
+/*entorno*/
+
+active proctype enviroment(){
+	do
+		if
+			::contraseña=1
+			::contraseña=0
+			::button_pressed=1
+			::button_pressed=0
+			::skip
+		fi; printf("contraseña= %d, boton=%d,alarma=%e, interruptor=%e",contraseña,button_pressed,alarma,interruptor);
+	od
+
+}
+
+
+
+
