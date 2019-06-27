@@ -12,9 +12,10 @@ int cuenta=0;
 int timeout_seg=0;
 int correcto=0;
 int CONTR_0=1;
-int CONTR_1=2;
-int CONTR_2=3;
+int CONTR_1=1;
+int CONTR_2=1;
 int aux=0;
+volatile int tiempo_apagar=0;
 
 /******************************************************************************
  * FunctionName : user_rf_cal_sector_set
@@ -74,9 +75,16 @@ uint32 user_rf_cal_sector_set(void)
 
 int cont_correcta(){
   if(correcto==1){
-    return 1;
-  }
+    if(!GPIO_INPUT_GET(0)){
+    if (xTaskGetTickCount () > timeout) {
+  		timeout = xTaskGetTickCount () + tiempoGuarda ;
+  		return 1;
+  	}
+    return 0;
+  }}
+
   return 0;
+
 }
 int cont_incorrecta(){
   if(correcto==0){
@@ -97,7 +105,7 @@ int tocar(fsm_t *this){
 
 }
 
-int timeout_1s(){
+int timeout_1s_button(){
   if(xTaskGetTickCount()>=timeout_seg){
     GPIO_OUTPUT_SET(LED, 0);
     vTaskDelay(10);
@@ -115,6 +123,13 @@ int timeout_1s(){
 return 0;
 }
 
+int timeout_1s(fsm_t *this){
+    if (xTaskGetTickCount () > tiempo_apagar) {
+  		return 1;
+  	}
+    return 0;
+
+}
 
 /* funciones de salida */
 void inicializar(){
@@ -162,6 +177,7 @@ void comprobar_cifra_2(){
 }
 
 void LED_ON(){
+  tiempo_apagar=xTaskGetTickCount()+segundo;
   GPIO_OUTPUT_SET(LED, 0);
 }
 
@@ -175,14 +191,14 @@ void LED_OFF(){
  */
 static fsm_trans_t cifrado[] = {
   { IDLE, tocar , CIFRA0,  inicializar },
-  { CIFRA0, timeout_1s , CIFRA1,  comprobar_cifra_0 },
-  { CIFRA1, timeout_1s , CIFRA2,  comprobar_cifra_1 },
-  { CIFRA2, timeout_1s , IDLE,  comprobar_cifra_2 },
+  { CIFRA0, timeout_1s_button , CIFRA1,  comprobar_cifra_0 },
+  { CIFRA1, timeout_1s_button , CIFRA2,  comprobar_cifra_1 },
+  { CIFRA2, timeout_1s_button , IDLE,  comprobar_cifra_2 },
   {-1, NULL, -1, NULL },
 };
 static fsm_trans_t encendido[]={
   {APAGADO,cont_correcta,ENCENDIDO,LED_ON},
-  {ENCENDIDO,cont_incorrecta,APAGADO,LED_OFF},
+  {ENCENDIDO,timeout_1s,APAGADO,LED_OFF},
   {-1,NULL,-1,NULL},
 };
 
