@@ -262,9 +262,8 @@ static void int_contra(){
 void user_init(void)
 {
     PIN_FUNC_SELECT(GPIO_PIN_REG_12,FUNC_GPIO12);
-    xTaskHandle task_contra;
-    xTaskHandle task_presencia;
-    xTaskCreate(&int_contra, "startup", 2048, NULL, 1, &task_contra);
-    xTaskCreate(&presencia, "startup", 2048, NULL, 2, &task_presencia);
+    xTaskHandle task;
+    xTaskCreate(&int_contra, "startup", 2048, NULL, 1, &task);
+    xTaskCreate(&presencia, "startup", 2048, NULL, 2, &task);
 }
 
